@@ -17,90 +17,13 @@ from openai import OpenAI
 from urllib.parse import urlparse
 import argparse  # ← 新增
 
+from browser.driver import get_driver  # 得到一个初始的driver实例
+from browser.login import login, check_login  # 登录函数和检查登录状态函数
+
 # 添加命令行参数解析
 parser = argparse.ArgumentParser(description="Web automation and SQL log parser")
 parser.add_argument('--sql_log_name', required=True, help='Path to the MySQL log file')
 args = parser.parse_args()
-
-
-# 创建 ChromeOptions 实例
-options = Options()
-
-# 如果你不想看到浏览器界面，可以启用无头模式（headless）
-options.add_argument('--headless')
-
-# 配置 Chrome 浏览器的路径（可以根据需要调整）
-chrome_path = os.environ.get("chrome_path")  # 从环境变量中读取
-options.binary_location = chrome_path
-
-# 创建 WebDriver 服务，自动下载并使用正确的 ChromeDriver 版本
-service = Service(ChromeDriverManager().install())
-
-# 创建 WebDriver 实例
-driver = webdriver.Chrome(service=service, options=options)
-
-# 增加页面加载超时时间（单位：秒）
-driver.set_page_load_timeout(10)  # 设置为30秒
-
-# 增加脚本执行超时时间
-driver.set_script_timeout(10)
-
-
-# 登录函数
-def login(max_retries=3):
-    for attempt in range(max_retries):
-        try:
-            driver.get("http://127.0.0.1:2222/login.php")
-            
-            # 使用 By.NAME 来定位用户名输入框
-            username_field = driver.find_element(By.NAME, "username")
-            username_field.send_keys("admin")
-
-            # 使用 By.NAME 来定位密码输入框
-            password_field = driver.find_element(By.NAME, "password")
-            password_field.send_keys("password")
-
-            # 使用 By.NAME 来定位登录按钮
-            login_button = driver.find_element(By.NAME, "Login")
-            login_button.click()
-
-            # 跳转到安全设置页面
-            driver.get("http://127.0.0.1:2222/security.php")
-
-            security_dropdown = Select(driver.find_element(By.NAME, "security"))
-
-            security = "Low"
-            # security = "High"
-            print("security:",security)
-            security_dropdown.select_by_visible_text(security)  # 根据文本选择
-
-            submit_button = driver.find_element(By.XPATH, "//input[@type='submit'] | //button[@type='submit']")
-            submit_button.click()
-            return
-        except Exception as e:
-            print(f"登录尝试 {attempt + 1}/{max_retries} 失败: {str(e)}")
-
-
-def handle_unexpected_alert():
-    try:
-        alert = Alert(driver)
-        print(f"[Alert Detected] Text: {alert.text}")
-        alert.accept()  # 点击“确定”
-    except NoAlertPresentException:
-        pass  # 没有 alert，什么也不做
-
-def check_login():
-    """
-    检查当前页面是否仍然处于登录状态。如果没有登录，执行登录操作。
-    """
-    handle_unexpected_alert()
-
-    # 检查当前页面的 URL 是否是登录页面的 URL
-    if "login.php" in driver.current_url:
-        print("Login session expired or not logged in, performing login again...")
-        login()  # 执行登录操作
-        print("Re-logged in successfully!")
-
 
 # 递归获取所有链接
 def get_all_links(url, visited_links=None, blacklist=None, depth=0, max_depth=2):
@@ -120,7 +43,7 @@ def get_all_links(url, visited_links=None, blacklist=None, depth=0, max_depth=2)
 
     try:
         driver.get(url)
-        check_login()
+        check_login(driver)
         driver.get(url)
         
         # 只有访问成功才加入已访问集合
@@ -151,7 +74,7 @@ def get_form_inputs(url):
     try:
         # 访问页面
         driver.get(url)
-        check_login()
+        check_login(driver)
         driver.get(url)
 
     except TimeoutException:
@@ -204,7 +127,7 @@ def generate_random_value(length=5):
 
 # 先填完所有可填写字段，然后最后统一提交一次”
 def fill_and_submit_form(form_inputs):
-    check_login()
+    check_login(driver)
     """
     填充并提交表单，针对每个 `type="text"`、`type="password"`、`type="email"`、`type="tel"`、`type="url"`、
     `type="search"` 和 `textarea` 的输入框，填充一个随机值。
@@ -380,7 +303,7 @@ def find_sql_inputs(form_inputs):
                 # try:
                 clear_sql_log()
                 driver.get(url)
-                check_login()
+                check_login(driver)
                 driver.get(url)
 
                 # 🔽 遍历所有字段：为目标字段填特定值，其它字段填随机值
@@ -516,7 +439,7 @@ def check_xss_reflection(target_value, urls, payload=None):
         for u in urls:
             try:
                 driver.get(u)
-                check_login()
+                check_login(driver)
                 driver.get(u)
 
                 if target_value in driver.page_source:
@@ -550,7 +473,7 @@ def find_xss_inputs(form_inputs, all_urls):
                 target_value = generate_random_value(8)
                 # try:
                 driver.get(url)
-                check_login()
+                check_login(driver)
                 driver.get(url)
 
                 # 填充字段
@@ -672,7 +595,7 @@ def test_sql_payload(url, form, input_name, payload, trigger_value):
     try:
         clear_sql_log()
         driver.get(url)
-        check_login()
+        check_login(driver)
         driver.get(url)
         
         # 填充表单
@@ -1041,7 +964,7 @@ def test_xss_payload(url, form, input_name, payload, trigger_value, reflected_ur
         
         # 导航到目标页面
         driver.get(url)
-        check_login()
+        check_login(driver)
         driver.get(url)
         
         # 填充表单
@@ -1275,7 +1198,8 @@ def run_llm_xss_attack(input_point):
 #=====================================================================================================================
 
 # 登录
-login()
+driver = get_driver(headless=True)
+login(driver)
 print("login success")
 
 # 获取初始页面的链接和表单
