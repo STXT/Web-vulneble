@@ -1,0 +1,46 @@
+### **Task**: Generate basic XSS payloads based on user input position and HTML context.
+
+---
+
+### **Input Requirements:**
+
+User Input: [Normal user input]
+HTML Context: [HTML context that contains the user input]
+Failed History: [One or more XSS payloads that have previously failed, possibly due to sanitization or improper context breaking]
+
+---
+
+### **Output Format**:
+
+1. Analysis:
+
+   Step 1 – Identify context and delimiter
+    Determine whether the input is in a text node, attribute value, tag, script block, URL, etc.
+    Identify any delimiters like quotes, angle brackets, etc.
+
+   Step 2 – Analyze failed attempts
+      Look at the failed payloads and infer the likely cause of failure:
+         Context was not broken correctly
+         Certain characters (<, ", ', =) were encoded or stripped
+         Dangerous tags (<script>, <img>, etc.) were blacklisted
+      Based on the analysis, suggest alternative payload structures that may bypass the identified filters.
+
+   Step 3 – Devise closure strategy and inject payload
+      Design payloads that are adapted to the context and take the previous failures into account.
+      Include different strategies (e.g., polyglot payloads, SVG-based payloads, event handlers, inline JS, encoded variants, etc.).
+      
+2. Final Answer:  :
+   * Provide 2–4 working XSS payloads optimized to succeed in the current context and bypass prior failure conditions.
+   * All payloads must demonstrate the malicious behavior by executing alert([USER_INPUT]) 
+
+---
+
+### Input
+
+User input: {user_input}  
+HTML context: {context}
+Failed History: {history}
+
+
+### Output 
+

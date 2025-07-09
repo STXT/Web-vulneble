@@ -1,0 +1,75 @@
+**Role**: Senior Penetration Testing Engineer  
+**Objective**: Implement the critical SQL-injection exploitation step—**Context Escape**  
+
+**Task Requirements**  
+When user-supplied input is embedded in any of the following SQL contexts, adjust that input so the subsequent payload can **break out of the original SQL context** while keeping the final statement syntactically valid:
+
+1. **Break the original syntactic structure**: Exit the constraints imposed on the input (e.g., quotes or parentheses).  
+2. **Preserve valid SQL via comment truncation**: Insert comment delimiters so the modified query remains legal and executes successfully.
+
+Pay special attention to these context types:
+
+* **String literals** (enclosed in single `'` or double `"` quotes)  
+* **Numeric values** (no quotes, used directly in expressions)  
+* **Identifiers** (table/column names—enclosed in back-ticks `` ` `` or bare)  
+* **Sub-queries** (nested statements inside parentheses)
+
+**Allowed Operations** *(choose only from the list below—do **not** add logic such as `OR 1=1`, which changes behaviour beyond context escape)*  
+
+◼ **Quote closure**: Inject a quote (`'`, `"`, `` ` ``) to terminate the original string/identifier early  
+◼ **Parenthesis closure**: Inject `(` or `)` to close nested structures  
+◼ **Comment truncation**: Use `#`, `-- `, or `/* … */` to comment-out trailing characters and avoid syntax errors  
+
+---
+
+### Input Format
+```
+User input: [original user data]  
+Resulting SQL query in the database: [full SQL statement]  
+```
+
+### Output Format
+1. Analysis:  
+   - **Step 1 – Identify context and delimiter**  
+   - **Step 2 – Devise closure strategy and append a comment**, showing the intermediate results after each tweak.  
+     If the input is concatenated directly into the query (i.e., not wrapped in any context), simply output the raw input.
+
+2. Final Answer:  
+   ◼ 1–3 lines, each containing a valid escaped variant. **Every variant must be correct.**
+
+---
+
+### Example  
+
+**Input**  
+```
+User input: 416314935838  
+Resulting SQL query in the database: SELECT * FROM users WHERE id LIKE (("%416314935838%")) LIMIT 0, 1
+```  
+
+**Output**  
+1. Analysis:
+   - Step 1 – Identify context and delimiter 
+     The input `416314935838` appears in:  
+     SELECT * FROM users WHERE id LIKE (("%416314935838%")) LIMIT 0, 1
+     It is inside a **LIKE pattern** wrapped by **double quotes `"`, wildcards `%`, and two nested parentheses `(())`**:
+     LIKE (("%[input]%"))
+
+   - Step 2 – Closure strategy with comment 
+     1. Add `"` to close the string → `416314935838"`  
+     2. Add `)` to close the first `(` → `416314935838")`  
+     3. Add another `)` to close the second `(` → `416314935838"))`  
+     4. Append a comment (`#` or `-- `) to ignore the trailing `%"))` → `416314935838"))#`  
+        (MySQL accepts `#`; standard SQL uses `-- ` plus a space.)
+
+2. Final Answer:  
+416314935838"))#
+416314935838"))-- 
+
+---
+
+**Input**  
+User input: {user_input}  
+Resulting SQL query in the database: {sql_query}  
+
+**Output**

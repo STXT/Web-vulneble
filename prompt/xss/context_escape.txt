@@ -1,0 +1,88 @@
+### **Task**: Generate basic XSS payloads based on user input position and HTML context.
+
+---
+
+### **Input Requirements:**
+
+User Input: [Normal user input]
+HTML Context: [HTML context that contains the user input]
+
+---
+
+### **Output Format**:
+
+1. Analysis:
+
+   * **Step 1 – Identify context and delimiter**: Determine the HTML element or context that the input is embedded within.
+   * **Step 2 – Devise closure strategy and inject payload**: Generate the payload to break out of the context and inject a script.
+
+2. Final Answer:
+   * Provide XSS payloads that successfully exploit the identified context, showcasing the necessary payloads to bypass sanitization and inject malicious code.
+   * All payloads must demonstrate the malicious behavior by executing alert([USER_INPUT]) 
+---
+
+### **Example 1**
+
+**Input**
+User input: 123456  
+HTML context: <pre>Hello 123456</pre>
+
+**Output**
+
+1. Analysis:
+
+   * Step 1 – Identify context and delimiter
+     The input `123456` appears within the `<pre>` tag and is being rendered as text content.
+     This is a **text node** inside the `<pre>` tag, which is commonly used to display preformatted text.
+
+   * Step 2 – Closure strategy and inject payload
+
+     1. **Break the `<pre>` context and inject a new script tag**:
+
+        * Close the current `<pre>` tag and inject a `<script>` tag for XSS payload.
+     2. **Other payload variants**:
+
+        * Use an `<img>` tag with an `onerror` attribute or a `<svg>` tag with an `onload` event to trigger JavaScript execution.
+
+2. Final Answer:
+</pre><script>alert(123456)</script><pre>
+</pre><img src=x onerror=alert(123456)><pre>
+</pre><svg/onload=alert(123456)><pre>
+
+---
+
+### **Example 2** 
+
+**Input**
+User input: 416314935838  
+HTML context: <div class="message">Welcome, "416314935838"</div>
+
+**Output**
+
+1. Analysis:
+
+   * Step 1 – Identify context and delimiter
+         The input appears within an HTML attribute value (enclosed in double quotes)
+         The exact context is: "...[USER_INPUT]..." inside a div's text content
+         Delimiter: Double quotes (")
+
+   * Step 2 – Closure strategy and inject payload
+         Strategy 1: Escape the attribute context and inject new HTML tags
+         Strategy 2: Add new event handlers while maintaining valid HTML syntax
+         Key requirement: Must preserve the original quote balance
+
+2. Final Answer:  
+"><script>alert(416314935838)</script>
+"><img src=x onerror=alert(416314935838)>
+"><svg/onload=alert(416314935838)>
+
+---
+
+### Input
+
+User input: {user_input}  
+HTML context: {context}
+
+
+### Output 
+
