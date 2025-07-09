@@ -19,162 +19,17 @@ import argparse  # ← 新增
 
 from browser.driver import get_driver  # 得到一个初始的driver实例
 from browser.login import login, check_login  # 登录函数和检查登录状态函数
+from browser.navigation import get_all_links  # 递归获取所有链接
+from browser.form import get_form_inputs, fill_and_submit_form, get_all_form_inputs  # 获取表单输入点和填充表单的函数
+
+from utils.misc import generate_random_value  # 生成随机值的函数
+
+
 
 # 添加命令行参数解析
 parser = argparse.ArgumentParser(description="Web automation and SQL log parser")
 parser.add_argument('--sql_log_name', required=True, help='Path to the MySQL log file')
 args = parser.parse_args()
-
-# 递归获取所有链接
-def get_all_links(url, visited_links=None, blacklist=None, depth=0, max_depth=2):
-    if visited_links is None:
-        visited_links = set()
-    if blacklist is None:
-        blacklist = set()
-
-    if depth > max_depth:
-        return visited_links
-
-    domain = urlparse(url).netloc
-
-    # 先检查是否已处理
-    if url in visited_links or url in blacklist:
-        return visited_links
-
-    try:
-        driver.get(url)
-        check_login(driver)
-        driver.get(url)
-        
-        # 只有访问成功才加入已访问集合
-        visited_links.add(url)  # 正确位置
-        
-        links = driver.find_elements(By.TAG_NAME, "a")
-        link_urls = [link.get_attribute('href') for link in links if link.get_attribute('href')]
-
-        for link in link_urls:
-            if urlparse(link).netloc == domain:
-                if link not in visited_links and link not in blacklist:
-                    get_all_links(link, visited_links, blacklist, depth+1, max_depth)
-                    
-    except TimeoutException:
-        # 仅加入黑名单，不污染已访问集合
-        blacklist.add(url)
-        print(f"Timeout skipped: {url}")
-        
-    return visited_links  # 仅包含成功访问的URL
-
-
-def get_form_inputs(url):
-    # 检查登录状态（确保已登录）
-    print("getting form:",url)
-
-    form_data = []
-
-    try:
-        # 访问页面
-        driver.get(url)
-        check_login(driver)
-        driver.get(url)
-
-    except TimeoutException:
-        print(f"Timeout exceeded for {url}, marking as visited and skipping.")
-        return form_data  # 如果页面加载超时，返回空数据
-
-    # 获取页面中的所有表单
-    forms = driver.find_elements(By.TAG_NAME, "form")
-    
-    for form in forms:
-        form_info = {
-            "url": url,  # 当前表单所在的页面 URL
-            "inputs": []
-        }
-
-        # 获取表单中的所有输入元素
-        inputs = form.find_elements(By.TAG_NAME, "input")
-        for input_element in inputs:
-            input_type = input_element.get_attribute("type")
-            input_name = input_element.get_attribute("name")
-            input_value = input_element.get_attribute("value") or ""  # 默认值为空字符串
-            form_info["inputs"].append({
-                "type": input_type,
-                "name": input_name,
-                "value": input_value
-            })
-
-        # 获取 textarea 元素，并统一格式添加
-        textareas = form.find_elements(By.TAG_NAME, "textarea")
-        for textarea in textareas:
-            input_name = textarea.get_attribute("name")
-            input_value = textarea.get_attribute("value") or ""  # 通常是空字符串
-            form_info["inputs"].append({
-                "type": "textarea",  # 统一标记
-                "name": input_name,
-                "value": input_value
-            })
-
-        # 将表单信息添加到结果列表中
-        form_data.append(form_info)
-
-    return form_data
-
-def generate_random_value(length=5):
-    """
-    生成一个随机的数字字符串，长度为 `length`。
-    默认生成 5 位数字。
-    """
-    return ''.join(random.choices('0123456789', k=length))
-
-# 先填完所有可填写字段，然后最后统一提交一次”
-def fill_and_submit_form(form_inputs):
-    check_login(driver)
-    """
-    填充并提交表单，针对每个 `type="text"`、`type="password"`、`type="email"`、`type="tel"`、`type="url"`、
-    `type="search"` 和 `textarea` 的输入框，填充一个随机值。
-    """
-    # 对于每个表单，遍历其中的输入字段并填充随机值
-    for form in form_inputs:
-
-        # 获取表单的 URL 和输入字段
-        url = form['url']  # 获取当前表单所在的页面 URL
-        print("filling url:",url)
-        driver.get(url)  # 切换到当前 URL 页面
-
-        # 获取表单的 URL 和输入字段
-        for input_field in form['inputs']:
-            input_type = input_field['type']
-            input_name = input_field['name']
-
-            # 过滤出与文本相关的字段（text, password, email, tel, url, search, textarea）
-            if input_name:  # 仅当 name 不为空时才继续
-                if input_type in ['text', 'password', 'email', 'tel', 'url', 'search']:
-                    random_value = generate_random_value(5)  # 生成一个 5 位数字
-                    try:
-                        input_element = driver.find_element(By.NAME, input_name)
-                        input_element.clear()  # 清空现有的值
-                        input_element.send_keys(random_value)  # 输入随机值
-                    except:
-                        print(f"[Warning] Could not find input field with name: {input_name}")
-            
-            # 处理 textarea 类型的输入框
-            if input_type == 'textarea' and input_name:
-                random_value = generate_random_value(10)  # 生成一个 10 位数字作为 textarea 的值
-                try:
-                    textarea_element = driver.find_element(By.NAME, input_name)
-                    textarea_element.clear()  # 清空现有的值
-                    textarea_element.send_keys(random_value)  # 输入随机值
-                except:
-                    print(f"[Warning] Could not find textarea with name: {input_name}")
-
-        # 提交表单（submit button）
-        # 在每个 form['inputs'] 中如果有提交按钮（type="submit"），直接点击
-        for input_field in form['inputs']:
-            if input_field['type'] == 'submit' and input_field['name']:
-                try:
-                    submit_button = driver.find_element(By.NAME, input_field['name'])
-                    submit_button.click()
-                except:
-                    print(f"[Warning] Could not find submit button with name: {input_field['name']}")
 
 def fix_mysql_file_lines(lines: list):
         """
@@ -1200,26 +1055,12 @@ def run_llm_xss_attack(input_point):
 # 登录
 driver = get_driver(headless=True)
 login(driver)
-print("login success")
 
 # 获取初始页面的链接和表单
-visited_links = get_all_links("http://127.0.0.1:2222/index.php")
-
-# 打印爬取的链接
-print("Found links:")
-for link in visited_links:
-    print(link)
-
+visited_links = get_all_links(driver, "http://127.0.0.1:2222/index.php")
 
 # 获取每个链接的输入点
-all_form_inputs = []  # 用于存储所有链接的输入点
-for link in visited_links:
-    form_inputs = get_form_inputs(link)
-    if form_inputs:
-        all_form_inputs.append(form_inputs)
-
-for inputs in all_form_inputs:
-    print(inputs)
+all_form_inputs = get_all_form_inputs(driver, visited_links)
 
 # 找SQL注入漏洞可能的输入点
 print("\nStarting SQL Injection Detection...")

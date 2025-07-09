@@ -3,6 +3,9 @@
 
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import Select
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException
 
 def login(driver, url="http://127.0.0.1:2222/login.php", username="admin", password="password", security="Low"):
     driver.get(url)
@@ -21,12 +24,22 @@ def login(driver, url="http://127.0.0.1:2222/login.php", username="admin", passw
 
     # 跳转到安全设置页面
     driver.get("http://127.0.0.1:2222/security.php")
+    try:
+        # 等待下拉框出现，最多等待10秒
+        security_element = WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.NAME, "security"))
+        )
+        security_dropdown = Select(security_element)
+    except TimeoutException:
+        raise RuntimeError("等待安全等级下拉框超时，页面可能未正确加载")
     security_dropdown = Select(driver.find_element(By.NAME, "security"))
     print("security:", security)
     security_dropdown.select_by_visible_text(security) # 根据文本选择
 
     submit_button = driver.find_element(By.XPATH, "//input[@type='submit'] | //button[@type='submit']")
     submit_button.click()
+
+    print("login success")
 
 def check_login(driver):
     """

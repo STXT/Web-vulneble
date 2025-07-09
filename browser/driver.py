@@ -27,7 +27,7 @@ def get_driver(headless=True):
     driver = webdriver.Chrome(service=service, options=options)
 
     # 增加页面加载超时时间（单位：秒）
-    driver.set_page_load_timeout(10) # 设置为10秒
+    driver.set_page_load_timeout(30) # 设置为10秒
 
     # 增加脚本执行超时时间
     driver.set_script_timeout(10)
