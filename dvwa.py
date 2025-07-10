@@ -24,7 +24,9 @@ from browser.form import get_all_form_inputs  # 获取表单输入点和填充�
 
 from utils.misc import generate_random_value  # 生成随机值的函数
 from utils.sql_log import get_all_sql_statments, clear_sql_log  # 获取SQL日志和清除日志的函数
+from utils.xss_reflection import check_xss_reflection  # XSS反射检测函数
 from vuln.sql import find_sql_inputs, get_all_sql_inputs  # SQL注入检测函数
+from vuln.xss import find_xss_inputs, get_all_xss_inputs  # XSS注入检测函数
 
 
 
@@ -32,176 +34,6 @@ from vuln.sql import find_sql_inputs, get_all_sql_inputs  # SQL注入检测函�
 parser = argparse.ArgumentParser(description="Web automation and SQL log parser")
 parser.add_argument('--sql_log_name', required=True, help='Path to the MySQL log file')
 args = parser.parse_args()
-
-def extract_xss_input_context(input_value, page_content, payload, occurrence=1):
-    """
-    提取输入值所在位置的上下文信息
-    :param input_value: 用户输入的测试值
-    :param page_content: 页面内容（HTML）
-    :param payload: 实际使用的payload（用于调整上下文范围）
-    :param occurrence: 指定获取第几个匹配项（默认为第一个）
-    :return: 包含输入值及其周围HTML上下文的字符串列表
-    """
-    contexts = []
-    start_index = -1
-    count = 0
-    
-    # 查找指定次数的出现位置
-    while count < occurrence:
-        start_index = page_content.find(input_value, start_index + 1)
-        if start_index == -1:
-            break
-        
-        count += 1
-        
-        end_index = start_index + len(input_value)
-        
-        # 计算上下文范围（前后各扩展100字符）
-        length_diff = len(payload) - len(input_value)
-        chazhi = int(length_diff / 2)  # 使用整数除法
-        # 确保提取的上下文不会超出HTML内容的边界
-        context_start = max(0, start_index - 10 - chazhi)  # 取输入值前200个字符作为上下文开始
-        context_end = min(len(page_content), end_index + 10 + chazhi)  # 取输入值后200个字符作为上下文结束
-        
-        # 向前查找最近的完整标签开始
-        while context_start > 0:
-            if page_content[context_start] == '<':
-                break
-            context_start -= 1
-        
-        # 向后查找最近的完整标签结束
-        while context_end < len(page_content) - 1:
-            if page_content[context_end] == '>':
-                context_end += 1
-                break
-            context_end += 1
-        
-        # 提取上下文片段
-        context_snippet = page_content[context_start:context_end]
-        
-        # # 高亮显示输入值
-        # highlighted = context_snippet.replace(input_value, f"<mark>{input_value}</mark>")
-        
-        # 添加到结果列表
-        contexts.append(context_snippet)
-    
-    return contexts if contexts else [""]
-
-
-def check_xss_reflection(target_value, urls, payload=None):
-    """
-    检查 target_value 是否出现在当前页面或给定的 url 页面中（反射）
-    :return: 出现的页面列表
-    """
-    reflected_pages = []
-    contexts = []
-    if payload==None:
-        # 检查当前页
-        if target_value in driver.page_source:
-            # 获取输入值所在的上下文
-            reflected_pages.append("self")
-            context = extract_xss_input_context(target_value, driver.page_source, target_value)
-            contexts.append(context)
-
-        # 检查其它已知页面
-        for u in urls:
-            try:
-                driver.get(u)
-                check_login(driver)
-                driver.get(u)
-
-                if target_value in driver.page_source:
-                    reflected_pages.append(u)
-                    context = extract_xss_input_context(target_value, driver.page_source, target_value)
-                    contexts.append(context)
-            except:
-                continue
-
-    return reflected_pages, contexts
-
-            
-# 添加XSS检测功能
-def find_xss_inputs(form_inputs, all_urls):
-
-    xss_inputs_results = []
-
-    for form in form_inputs:
-        url = form['url']
-        inputs = form['inputs']
-        print(f"\n[Scanning Form for XSS] {url}")
-
-        for input_field in inputs:
-            input_type = input_field['type']
-            input_name = input_field['name']
-
-            if not input_name:
-                continue
-
-            if input_type in ['text', 'password', 'email', 'tel', 'url', 'search', 'textarea']:
-                target_value = generate_random_value(8)
-                # try:
-                driver.get(url)
-                check_login(driver)
-                driver.get(url)
-
-                # 填充字段
-                for f in inputs:
-                    name = f.get('name')
-                    ftype = f.get('type')
-
-                    if not name or ftype in ['submit', 'hidden']:
-                        continue
-
-                    try:
-                        elem = driver.find_element(By.NAME, name)
-                        elem.clear()
-                        if name == input_name:
-                            elem.send_keys(target_value)
-                            print(f"{name} fill {target_value}")
-                        else:
-                            elem.send_keys(generate_random_value(5))
-                            print(f"{name} fill random")
-                    except:
-                        print(f"[Warning] Could not find input field: {name}")
-                        continue
-
-                # 提交表单
-                submitted = False
-                for f in inputs:
-                    if f['type'] == 'submit':
-                        try:
-                            if f.get('name'):
-                                submit_button = driver.find_element(By.NAME, f['name'])
-                            else:
-                                submit_button = driver.find_element(By.XPATH, "//input[@type='submit'] | //button[@type='submit']")
-                            submit_button.click()
-                            submitted = True
-                            break
-                        except:
-                            continue
-
-                if not submitted:
-                    print(f"[Warning] No submit button found for form at {url}, skipping...")
-                    continue
-
-                # 检查 XSS 是否反射在当前页面或其他页面
-                # print("checking xss:",target_value) # 这里有时候也会漏找，试试print拖一下时间看还会漏吗
-                time.sleep(0.2)
-                matched_pages, contexts = check_xss_reflection(target_value, all_urls)
-                if matched_pages:
-                    print(f"[+] XSS reflected by input '{input_name}' with value '{target_value}' -> found in {matched_pages}")
-                    xss_inputs_results.append({
-                        "input_name": input_name,
-                        "trigger_value": target_value,
-                        "reflected_pages": matched_pages,
-                        "context": contexts,  # 添加提取的上下文
-                        "form": form
-                    })
-                # # 页面跳转非常多的时候容易出错，正常现象
-                # except Exception as e:
-                #     print(f"[Error] Exception while testing input '{input_name}': {e}")
-
-    return xss_inputs_results
 
 def parse_llm_output(output_text):
     """
@@ -686,7 +518,7 @@ def test_xss_payload(url, form, input_name, payload, trigger_value, reflected_ur
             return False, [], []
         
         # 检查反射情况
-        reflected_pages, contexts = check_xss_reflection(trigger_value, reflected_urls)
+        reflected_pages, contexts = check_xss_reflection(driver, trigger_value, reflected_urls)
 
         executed = False
         with open("xss_verified.txt", 'r') as f:
@@ -875,27 +707,9 @@ visited_links = get_all_links(driver, "http://127.0.0.1:2222/index.php")
 # 获取每个链接的输入点
 all_form_inputs = get_all_form_inputs(driver, visited_links)
 
-# 找SQL注入漏洞可能的输入点
+# 找SQL与XSS注入漏洞可能的输入点
 sql_results = get_all_sql_inputs(driver, all_form_inputs, args)
-
-# 找XSS注入漏洞可能的输入点
-print("\nStarting XSS Detection...")
-xss_results = []
-for inputs in all_form_inputs:
-    xss_findings = find_xss_inputs(inputs, visited_links)
-    xss_results.extend(xss_findings)
-
-# # 打印结果
-# print("\n\n=== Scan Results ===")
-# print(f"\nSQL Injection Findings ({len(sql_results)}):")
-# for result in sql_results:
-#     print(result)
-
-print(f"\nXSS Findings ({len(xss_results)}):")
-for result in xss_results:
-    print(result)
-
-
+xss_results = get_all_xss_inputs(driver, all_form_inputs, visited_links)
 
 client = OpenAI(
     # 若没有配置环境变量，请用百炼API Key将下行替换为：api_key="sk-xxx",

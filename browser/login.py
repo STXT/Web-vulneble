@@ -50,7 +50,7 @@ def check_login(driver):
     """
     检查当前页面是否仍然处于登录状态。如果没有登录，执行登录操作。
     """
-    from .alert import handle_unexpected_alert
+    from utils.misc import handle_unexpected_alert
     handle_unexpected_alert(driver)
 
     # 检查当前页面的 URL 是否是登录页面的 URL
