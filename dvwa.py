@@ -25,68 +25,18 @@ from browser.form import get_all_form_inputs  # 获取表单输入点和填充�
 from utils.misc import generate_random_value  # 生成随机值的函数
 from utils.sql_log import get_all_sql_statments, clear_sql_log  # 获取SQL日志和清除日志的函数
 from utils.xss_reflection import check_xss_reflection  # XSS反射检测函数
-from vuln.sql import find_sql_inputs, get_all_sql_inputs  # SQL注入检测函数
-from vuln.xss import find_xss_inputs, get_all_xss_inputs  # XSS注入检测函数
 
+from vuln.sql import get_all_sql_inputs  # SQL注入检测函数
+from vuln.xss import get_all_xss_inputs  # XSS注入检测函数
+
+from llm.client import get_client, get_ai_response  # LLM客户端
+from llm.parse import parse_llm_output
 
 
 # 添加命令行参数解析
 parser = argparse.ArgumentParser(description="Web automation and SQL log parser")
 parser.add_argument('--sql_log_name', required=True, help='Path to the MySQL log file')
 args = parser.parse_args()
-
-def parse_llm_output(output_text):
-    """
-    解析LLM的输出，提取Final Answer部分后的payload列表
-    修改逻辑：
-    1. 将输出转为小写进行模式匹配
-    2. 找到最后一个包含"final answer"的行
-    3. 返回该行之后所有非空行的原始内容
-    """
-    lines = output_text.split('\n')
-    payloads = []
-    last_final_index = -1  # 记录最后一个"final answer"行的索引
-    
-    # 第一步：找到最后一个包含"final answer"的行
-    for i, line in enumerate(lines):
-        if "final answer" in line.lower():
-            last_final_index = i
-    
-    # 如果没有找到，返回空列表
-    if last_final_index == -1:
-        return []
-    
-    # 第二步：收集该行之后的所有非空行（保留原始格式）
-    for line in lines[last_final_index+1:]:
-        stripped = line.strip()
-        # 跳过空行
-        if not stripped:
-            continue
-        
-        # 添加到payload列表（保留原始行内容）
-        payloads.append(line)
-    
-    return payloads
-
-def get_ai_response(prompt, history=None, model="deepseek-chat", max_tokens=1000):
-    """
-    调用LLM获取响应
-    """
-    if history is None:
-        history = []
-    
-    messages = [{"role": "user", "content": prompt}]
-    print(messages)
-    try:
-        response = client.chat.completions.create(
-            model=model,
-            messages=messages,
-            max_tokens=max_tokens
-        )
-        return response.choices[0].message.content.strip()
-    except Exception as e:
-        print(f"Error calling AI model: {e}")
-        return ""
 
 def test_sql_payload(url, form, input_name, payload, trigger_value):
     """
@@ -318,7 +268,7 @@ def run_llm_sql_attack(input_point):
                 )
             
             # 获取LLM响应
-            output = get_ai_response(prompt)
+            output = get_ai_response(client, prompt)
             escape_payloads = parse_llm_output(output)
             
             if not escape_payloads:
@@ -405,7 +355,7 @@ def run_llm_sql_attack(input_point):
                 )
             
             # 获取LLM响应
-            output = get_ai_response(prompt)
+            output = get_ai_response(client, prompt)
             behavior_payloads = parse_llm_output(output)
             
             if not behavior_payloads:
@@ -628,7 +578,7 @@ def run_llm_xss_attack(input_point):
             )
         
         # 获取LLM响应
-        output = get_ai_response(prompt)
+        output = get_ai_response(client, prompt)
         print(output)
         escape_payloads = parse_llm_output(output)
         
@@ -711,11 +661,8 @@ all_form_inputs = get_all_form_inputs(driver, visited_links)
 sql_results = get_all_sql_inputs(driver, all_form_inputs, args)
 xss_results = get_all_xss_inputs(driver, all_form_inputs, visited_links)
 
-client = OpenAI(
-    # 若没有配置环境变量，请用百炼API Key将下行替换为：api_key="sk-xxx",
-    api_key='sk-1cb7a52f34da4e44a4974be96e33c591',  # 如何获取API Key：https://help.aliyun.com/zh/model-studio/developer-reference/get-api-key
-    base_url="https://api.deepseek.com"
-)
+# 初始化LLM客户端
+client = get_client()
 
 with open("prompt/sql/context_escape.txt", 'r', encoding='utf-8') as file:
     context_escape = file.read()

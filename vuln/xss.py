@@ -104,3 +104,5 @@ def get_all_xss_inputs(driver, all_form_inputs, visited_links, check_login_func=
     print(f"\nXSS Findings ({len(xss_results)}):")
     for result in xss_results:
         print(result)
+
+    return xss_results
