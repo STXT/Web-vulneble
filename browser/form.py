@@ -1,4 +1,4 @@
-# 获取一个url的所有表单输入点  填写所有字段并提交一次  获取一系列url的所有表单输入点
+# 1获取一个url的所有表单输入点  2获取一系列url的所有表单输入点  3填写所有字段并提交一次
 
 import random
 from selenium.webdriver.common.by import By
